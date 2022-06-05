@@ -7,7 +7,7 @@ import (
 )
 
 func TestDecode(t *testing.T) {
-	decoder, err := CreateDecoder()
+	decoder, err := CreateDecoder(2)
 	if err != nil {
 		t.Fatal(err)
 	}
