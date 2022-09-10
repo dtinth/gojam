@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,6 +16,7 @@ import (
 func main() {
 	// Parse command line arguments
 	server := flag.String("server", "localhost:22124", "server to connect to")
+	pcmout := flag.String("pcmout", "localhost:22992", "server to pipe PCM data to")
 
 	flag.Parse()
 
@@ -25,10 +29,39 @@ func main() {
 	}
 	fmt.Println("client:", client)
 
+	if *pcmout != "" {
+		installPCMOut(client, *pcmout)
+	}
+
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
 	fmt.Println("exiting")
 	client.Close()
+}
+
+func installPCMOut(client *gojam.Client, pcmout string) {
+	conn, err := net.Dial("tcp", pcmout)
+	if err != nil {
+		panic(err)
+	}
+	outChan := make(chan []byte, 100)
+	go func() {
+		for {
+			data := <-outChan
+			_, err := conn.Write(data)
+			if err != nil {
+				client.Close()
+				panic(err)
+			}
+		}
+	}()
+	client.HandlePCM = func(pcm []int16) {
+		var buf bytes.Buffer
+		for _, sample := range pcm {
+			binary.Write(&buf, binary.LittleEndian, sample)
+		}
+		outChan <- buf.Bytes()
+	}
 }

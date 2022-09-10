@@ -10,13 +10,19 @@ import (
 
 	"github.com/dtinth/gojam/pkg/jamulusaudio"
 	"github.com/dtinth/gojam/pkg/jamulusprotocol"
+	"github.com/dtinth/gojam/pkg/jitterbuffer"
 )
 
 type Client struct {
 	conn        net.Conn
 	nextCounter uint8
 	decoder     *jamulusaudio.OpusDecoder
+	buffer      *jitterbuffer.JitterBuffer
 	closed      bool
+
+	// Handle PCM data. This is called when a new PCM data is available.
+	// The PCM data is in stereo, 48kHz, 16-bit signed integer.
+	HandlePCM func([]int16)
 }
 
 // Creates a client
@@ -28,6 +34,9 @@ func NewClient(serverAddress string) (c *Client, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Create a jitter buffer
+	c.buffer = jitterbuffer.NewJitterBuffer(96)
 
 	// Connect to the server
 	conn, err := net.Dial("udp", serverAddress)
@@ -88,25 +97,7 @@ func (c *Client) handleIncomingPackets() {
 				c.handleProtocolMessage(message)
 			}
 		} else {
-			if false {
-				c.debug("Received audio packet of %d bytes", n)
-			}
-			samples := c.decoder.Decode(buf[:n], audioBuf)
-			if samples > 0 {
-				amplitude := 0
-				for i := 0; i < samples; i++ {
-					val := int(audioBuf[i])
-					if val < 0 {
-						val = -val
-					}
-					if val > amplitude {
-						amplitude = val
-					}
-				}
-				if amplitude > 0 {
-					c.debug("Decoded %d samples, amplitude = %d", samples, amplitude)
-				}
-			}
+			c.handleAudioPacket(buf[:n], audioBuf)
 		}
 	}
 }
@@ -243,6 +234,29 @@ func (c *Client) nextCounterValue() uint8 {
 	val := c.nextCounter
 	c.nextCounter++
 	return val
+}
+
+// Handles an audio packet
+func (c *Client) handleAudioPacket(packet []byte, audioBuf []int16) {
+	// Ensure that the packet is the correct size
+	expectedSize := 332
+	if len(packet) != expectedSize {
+		c.debug("Audio packet is %d bytes, expected %d", len(packet), expectedSize)
+		return
+	}
+	c.handleOpusPacket(packet[0:165], packet[165], audioBuf)
+	c.handleOpusPacket(packet[166:331], packet[331], audioBuf)
+}
+
+// Handles an Opus packet
+func (c *Client) handleOpusPacket(packet []byte, sequenceNum uint8, audioBuf []int16) {
+	opusPacket := c.buffer.PutIn(packet, sequenceNum)
+	if opusPacket != nil {
+		samples := c.decoder.Decode(packet, audioBuf)
+		if samples > 0 && c.HandlePCM != nil {
+			c.HandlePCM(audioBuf[:samples*2])
+		}
+	}
 }
 
 // Close the client
