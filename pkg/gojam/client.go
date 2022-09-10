@@ -15,12 +15,21 @@ import (
 type Client struct {
 	conn        net.Conn
 	nextCounter uint8
+	decoder     *jamulusaudio.OpusDecoder
+	closed      bool
 }
 
 // Creates a client
 func NewClient(serverAddress string) (c *Client, err error) {
 	c = &Client{}
 
+	// Create a decoder
+	c.decoder, err = jamulusaudio.CreateDecoder(2)
+	if err != nil {
+		return nil, err
+	}
+
+	// Connect to the server
 	conn, err := net.Dial("udp", serverAddress)
 	if err != nil {
 		return nil, err
@@ -45,7 +54,7 @@ func (c *Client) debug(format string, args ...interface{}) {
 // Sends a silence packet to the server every 100ms
 func (c *Client) sendSilence() {
 	silence := jamulusaudio.NewSilentOpusStream()
-	for {
+	for !c.closed {
 		packet := silence.Next()
 		_, err := c.conn.Write(packet[:])
 		if err != nil {
@@ -58,10 +67,12 @@ func (c *Client) sendSilence() {
 // Handles incoming packets from the server
 func (c *Client) handleIncomingPackets() {
 	buf := make([]byte, 8192)
-	for {
+	audioBuf := make([]int16, 8192)
+	for !c.closed {
 		n, err := c.conn.Read(buf)
 		if err != nil {
 			c.debug("Error reading from server: %s", err)
+			continue
 		}
 
 		// If first 2 bytes is 0x00 0x00, then it's a protocol message.
@@ -77,7 +88,25 @@ func (c *Client) handleIncomingPackets() {
 				c.handleProtocolMessage(message)
 			}
 		} else {
-			c.debug("Received audio packet of %d bytes", n)
+			if false {
+				c.debug("Received audio packet of %d bytes", n)
+			}
+			samples := c.decoder.Decode(buf[:n], audioBuf)
+			if samples > 0 {
+				amplitude := 0
+				for i := 0; i < samples; i++ {
+					val := int(audioBuf[i])
+					if val < 0 {
+						val = -val
+					}
+					if val > amplitude {
+						amplitude = val
+					}
+				}
+				if amplitude > 0 {
+					c.debug("Decoded %d samples, amplitude = %d", samples, amplitude)
+				}
+			}
 		}
 	}
 }
@@ -111,6 +140,8 @@ func (c *Client) handleProtocolMessage(message jamulusprotocol.Message) {
 		c.sendJittBufSize()
 	case jamulusprotocol.ReqChannelInfos:
 		c.sendChannelInfos()
+	case jamulusprotocol.ConnClientsList:
+		c.handleConnClientsList(message.Data)
 	}
 }
 
@@ -155,7 +186,7 @@ func (c *Client) sendJittBufSize() {
 // Sends a ChannelInfos message to the server
 func (c *Client) sendChannelInfos() {
 	// Convert name to bytes
-	name := []byte("Listener")
+	name := []byte("gj")
 	city := []byte("")
 
 	// Create a buffer to hold the message data
@@ -176,9 +207,55 @@ func (c *Client) sendChannelInfos() {
 	c.sendMessage(message)
 }
 
+// Handles a ConnClientsList message
+func (c *Client) handleConnClientsList(data []byte) {
+	// Create a buffer from the data
+	buf := bytes.NewBuffer(data)
+
+	// Read the clients until we reach the end of the buffer
+	for buf.Len() > 0 {
+		client, err := jamulusprotocol.ParseClientListItem(buf)
+		if err != nil {
+			c.debug("Error parsing client: %s", err)
+			break
+		}
+		c.unmute(client.ChannelId)
+	}
+}
+
+// Unmutes a channel
+func (c *Client) unmute(channelId uint8) {
+	// Create a buffer to hold the message data
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.LittleEndian, uint8(channelId)) // Channel ID
+	binary.Write(&buf, binary.LittleEndian, uint16(0x8000))   // Gain
+
+	message := jamulusprotocol.Message{
+		Id:      jamulusprotocol.ChannelGain,
+		Counter: c.nextCounterValue(),
+		Data:    buf.Bytes(),
+	}
+	c.sendMessage(message)
+}
+
 // Get the next counter value
 func (c *Client) nextCounterValue() uint8 {
 	val := c.nextCounter
 	c.nextCounter++
 	return val
+}
+
+// Close the client
+func (c *Client) Close() {
+	if c.closed {
+		return
+	}
+	message := jamulusprotocol.Message{
+		Id:      jamulusprotocol.ClmDisconnection,
+		Counter: c.nextCounterValue(),
+		Data:    []byte{},
+	}
+	c.sendMessage(message)
+	c.closed = true
+	c.conn.Close()
 }
