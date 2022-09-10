@@ -1,6 +1,6 @@
 package jamuluscrc
 
-func Crc(bytes []byte) uint32 {
+func Crc(bytes []byte) uint16 {
 	var poly uint32 = (1 << 5) | (1 << 12)
 	var bitOutMask uint32 = 1 << 16
 	var state uint32 = ^uint32(0)
@@ -19,5 +19,5 @@ func Crc(bytes []byte) uint32 {
 			}
 		}
 	}
-	return (^state) & 0xffff
+	return uint16((^state) & 0xffff)
 }

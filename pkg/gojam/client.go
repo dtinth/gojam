@@ -1,8 +1,11 @@
 package gojam
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"github.com/dtinth/gojam/pkg/jamulusaudio"
@@ -10,7 +13,8 @@ import (
 )
 
 type Client struct {
-	conn net.Conn
+	conn        net.Conn
+	nextCounter uint8
 }
 
 // Creates a client
@@ -35,7 +39,7 @@ func NewClient(serverAddress string) (c *Client, err error) {
 // Prints a debug logging message
 func (c *Client) debug(format string, args ...interface{}) {
 	format = "DEBUG [gojamclient] " + format + "\n"
-	fmt.Printf(format, args...)
+	fmt.Fprintf(os.Stderr, format, args...)
 }
 
 // Sends a silence packet to the server every 100ms
@@ -60,12 +64,121 @@ func (c *Client) handleIncomingPackets() {
 			c.debug("Error reading from server: %s", err)
 		}
 
-		// If first 2 bytes is 0x00 0x00, then it's a control message.
+		// If first 2 bytes is 0x00 0x00, then it's a protocol message.
 		if buf[0] == 0x00 && buf[1] == 0x00 {
-			msgId := jamulusprotocol.MsgId(int(buf[2]) + int(buf[3])*256)
-			c.debug("Received control message: %s", msgId.String())
+			message, err := jamulusprotocol.ParseMessage(buf)
+			if err != nil {
+				c.debug("Error parsing message: %s", err)
+			} else {
+				c.debug("Received message: %s", message)
+				if message.Id != jamulusprotocol.Ackn && message.Id < 1000 {
+					c.acknowledgeMessage(message.Id, message.Counter)
+				}
+				c.handleProtocolMessage(message)
+			}
 		} else {
 			c.debug("Received audio packet of %d bytes", n)
 		}
 	}
+}
+
+// Sends an acknowledgement message to the server
+func (c *Client) acknowledgeMessage(id jamulusprotocol.MsgId, counter uint8) {
+	// Generate a message data, which is just the ID
+	data := make([]byte, 2)
+	binary.LittleEndian.PutUint16(data, uint16(id))
+
+	message := jamulusprotocol.Message{Id: jamulusprotocol.Ackn, Counter: counter, Data: data}
+	c.sendMessage(message)
+}
+
+// Sends a message back to the server
+func (c *Client) sendMessage(message jamulusprotocol.Message) {
+	packet := message.ToPacket()
+	_, err := c.conn.Write(packet[:])
+	if err != nil {
+		c.debug("Error writing packet: %s", err)
+	}
+	c.debug("Sent message: %s", message)
+}
+
+// Handles a protocol message
+func (c *Client) handleProtocolMessage(message jamulusprotocol.Message) {
+	switch message.Id {
+	case jamulusprotocol.ReqNetwTransportProps:
+		c.sendNetwTransportProps()
+	case jamulusprotocol.ReqJittBufSize:
+		c.sendJittBufSize()
+	case jamulusprotocol.ReqChannelInfos:
+		c.sendChannelInfos()
+	}
+}
+
+// Sends a NetwTransportProps message to the server
+func (c *Client) sendNetwTransportProps() {
+	// Create a buffer to hold the message data
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.LittleEndian, uint32(166))   // Packet size
+	binary.Write(&buf, binary.LittleEndian, uint16(2))     // Block size
+	binary.Write(&buf, binary.LittleEndian, uint8(2))      // Channels
+	binary.Write(&buf, binary.LittleEndian, uint32(48000)) // Sample rate
+	binary.Write(&buf, binary.LittleEndian, uint16(2))     // Codec: Opus
+	binary.Write(&buf, binary.LittleEndian, uint16(1))     // Flags: Add sequence number
+	binary.Write(&buf, binary.LittleEndian, uint32(0))     // Other codec options
+
+	// Assert that the buffer is 19 bytes long
+	if buf.Len() != 19 {
+		panic(fmt.Sprintf("Buffer length is %d, expected 19", buf.Len()))
+	}
+
+	message := jamulusprotocol.Message{
+		Id:      jamulusprotocol.NetwTransportProps,
+		Counter: c.nextCounterValue(),
+		Data:    buf.Bytes(),
+	}
+	c.sendMessage(message)
+}
+
+// Sends a JittBufSize message to the server
+func (c *Client) sendJittBufSize() {
+	// Create a buffer to hold the message data
+	buf := make([]byte, 2)
+	binary.LittleEndian.PutUint16(buf, 4)
+	message := jamulusprotocol.Message{
+		Id:      jamulusprotocol.JittBufSize,
+		Counter: c.nextCounterValue(),
+		Data:    buf,
+	}
+	c.sendMessage(message)
+}
+
+// Sends a ChannelInfos message to the server
+func (c *Client) sendChannelInfos() {
+	// Convert name to bytes
+	name := []byte("Listener")
+	city := []byte("")
+
+	// Create a buffer to hold the message data
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.LittleEndian, uint16(0))         // Country
+	binary.Write(&buf, binary.LittleEndian, uint32(25))        // Listener
+	binary.Write(&buf, binary.LittleEndian, uint8(3))          // Skill Level
+	binary.Write(&buf, binary.LittleEndian, uint16(len(name))) // Name length
+	binary.Write(&buf, binary.LittleEndian, name)              // Name
+	binary.Write(&buf, binary.LittleEndian, uint16(len(city))) // City length
+	binary.Write(&buf, binary.LittleEndian, city)              // City
+
+	message := jamulusprotocol.Message{
+		Id:      jamulusprotocol.ChannelInfos,
+		Counter: c.nextCounterValue(),
+		Data:    buf.Bytes(),
+	}
+	c.sendMessage(message)
+}
+
+// Get the next counter value
+func (c *Client) nextCounterValue() uint8 {
+	val := c.nextCounter
+	c.nextCounter++
+	return val
 }
