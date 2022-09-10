@@ -1,4 +1,4 @@
-package audio
+package jamulusaudio
 
 // #cgo CFLAGS: -I${SRCDIR}/../../libs
 // #cgo LDFLAGS: -L${SRCDIR}/../../libs/opus/.libs -lopus

@@ -1,4 +1,4 @@
-package audio
+package jamulusaudio
 
 import (
 	"testing"

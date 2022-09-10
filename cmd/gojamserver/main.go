@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	fmt.Println("go-jam!")
+	fmt.Println("gojamserver! This is not done at all...")
 
 	pc, err := net.ListenPacket("udp", ":22199")
 	if err != nil {

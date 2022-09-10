@@ -1,4 +1,4 @@
-package crc
+package jamuluscrc
 
 func Crc(bytes []byte) uint32 {
 	var poly uint32 = (1 << 5) | (1 << 12)
