@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
+
+	"github.com/dtinth/gojam/pkg/gojam"
 )
 
 func main() {
@@ -13,6 +16,15 @@ func main() {
 
 	fmt.Println("gojam jamulus client")
 	fmt.Println("server:", *server)
+
+	client, err := gojam.NewClient(*server)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("client:", client)
+
+	// Sleep 10 seconds
+	time.Sleep(10 * time.Second)
 
 	// pc, err := net.ListenPacket("udp", ":22199")
 	// if err != nil {
