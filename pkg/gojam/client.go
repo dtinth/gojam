@@ -19,6 +19,7 @@ type Client struct {
 	decoder     *jamulusaudio.OpusDecoder
 	buffer      *jitterbuffer.JitterBuffer
 	closed      bool
+	info        jamulusprotocol.ChannelInfo
 
 	// Handle PCM data. This is called when a new PCM data is available.
 	// The PCM data is in stereo, 48kHz, 16-bit signed integer.
@@ -31,6 +32,13 @@ type Client struct {
 // Creates a client
 func NewClient(serverAddress string) (c *Client, err error) {
 	c = &Client{}
+	c.info = jamulusprotocol.ChannelInfo{
+		Name:       "gojam",
+		Country:    0,
+		City:       "",
+		Instrument: jamulusprotocol.InstrumentListener,
+		SkillLevel: jamulusprotocol.SkillIntermediate,
+	}
 
 	// Create a decoder
 	c.decoder, err = jamulusaudio.CreateDecoder(2)
@@ -183,26 +191,18 @@ func (c *Client) sendJittBufSize() {
 
 // Sends a ChannelInfos message to the server
 func (c *Client) sendChannelInfos() {
-	// Convert name to bytes
-	name := []byte("gj")
-	city := []byte("")
-
-	// Create a buffer to hold the message data
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, uint16(0))         // Country
-	binary.Write(&buf, binary.LittleEndian, uint32(25))        // Listener
-	binary.Write(&buf, binary.LittleEndian, uint8(3))          // Skill Level
-	binary.Write(&buf, binary.LittleEndian, uint16(len(name))) // Name length
-	binary.Write(&buf, binary.LittleEndian, name)              // Name
-	binary.Write(&buf, binary.LittleEndian, uint16(len(city))) // City length
-	binary.Write(&buf, binary.LittleEndian, city)              // City
-
 	message := jamulusprotocol.Message{
 		Id:      jamulusprotocol.ChannelInfos,
 		Counter: c.nextCounterValue(),
-		Data:    buf.Bytes(),
+		Data:    c.info.Bytes(),
 	}
 	c.sendMessage(message)
+}
+
+// Update the client's channel info
+func (c *Client) UpdateChannelInfo(info jamulusprotocol.ChannelInfo) {
+	c.info = info
+	c.sendChannelInfos()
 }
 
 // Handles a ConnClientsList message
