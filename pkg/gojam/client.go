@@ -217,6 +217,7 @@ func (c *Client) handleConnClientsList(data []byte) {
 			c.debug("Error parsing client: %s", err)
 			break
 		}
+		c.debug("Client list item: %s", client)
 		c.unmute(client.ChannelId)
 	}
 }

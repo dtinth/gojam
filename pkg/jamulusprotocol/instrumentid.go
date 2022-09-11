@@ -1,3 +1,4 @@
+//go:generate go run golang.org/x/tools/cmd/stringer -type=InstrumentId
 package jamulusprotocol
 
 type InstrumentId uint32

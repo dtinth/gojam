@@ -3,6 +3,7 @@ package jamulusprotocol
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 )
 
 // ClientListItem
@@ -11,13 +12,13 @@ type ClientListItem struct {
 	ChannelId uint8
 
 	// 16-bit country ID
-	ClientId uint16
+	CountryId uint16
 
 	// 32-bit instrument ID
-	InstrumentId uint32
+	InstrumentId InstrumentId
 
 	// 8-bit skill level
-	SkillLevel uint8
+	SkillLevel SkillLevelId
 
 	// Name
 	Name string
@@ -36,19 +37,23 @@ func ParseClientListItem(buf *bytes.Buffer) (o *ClientListItem, err error) {
 	}
 
 	// Read country ID
-	err = binary.Read(buf, binary.LittleEndian, &o.ClientId)
+	err = binary.Read(buf, binary.LittleEndian, &o.CountryId)
 	if err != nil {
 		return o, err
 	}
 
 	// Read instrument ID
-	err = binary.Read(buf, binary.LittleEndian, &o.InstrumentId)
+	var instrument uint32
+	err = binary.Read(buf, binary.LittleEndian, &instrument)
+	o.InstrumentId = InstrumentId(instrument)
 	if err != nil {
 		return o, err
 	}
 
 	// Read skill level
-	err = binary.Read(buf, binary.LittleEndian, &o.SkillLevel)
+	var skillLevel uint8
+	err = binary.Read(buf, binary.LittleEndian, &skillLevel)
+	o.SkillLevel = SkillLevelId(skillLevel)
 	if err != nil {
 		return o, err
 	}
@@ -77,4 +82,18 @@ func ParseClientListItem(buf *bytes.Buffer) (o *ClientListItem, err error) {
 	o.City = string(buf.Next(int(cityLength)))
 
 	return
+}
+
+// Return a string representation of this object.
+func (o *ClientListItem) String() string {
+	return fmt.Sprintf(
+		"ClientListItem{#%d \"%s\" from \"%s\", \"%d\" %s (%d), %s}",
+		o.ChannelId,
+		o.Name,
+		o.City,
+		o.CountryId,
+		o.InstrumentId,
+		o.InstrumentId,
+		o.SkillLevel,
+	)
 }
