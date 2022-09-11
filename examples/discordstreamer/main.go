@@ -61,7 +61,6 @@ func main() {
 	var pcmBuffer PcmBuffer
 	pcmBuffer.OnFull = func(buffer []int16) {
 		audioChannel <- buffer
-		fmt.Println("Got PCM of size", len(buffer))
 	}
 	j.HandlePCM = func(pcm []int16) {
 		pcmBuffer.Add(pcm)
