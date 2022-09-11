@@ -16,7 +16,7 @@ import (
 func main() {
 	// Parse command line arguments
 	server := flag.String("server", "localhost:22124", "server to connect to")
-	pcmout := flag.String("pcmout", "localhost:22992", "server to pipe PCM data to")
+	pcmout := flag.String("pcmout", "", "server to pipe PCM data to")
 
 	flag.Parse()
 

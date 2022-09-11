@@ -15,3 +15,19 @@ Then provide these environment variables to `go build` or `go run` in order to s
 export CGO_CFLAGS="-I$PWD/jamulus/libs/opus/include"
 export CGO_LDFLAGS="-L$PWD/jamulus/libs/opus/.libs"
 ```
+
+## Usage
+
+A simple CLI, `gojamclient` is provided that can connect to a Jamulus server and send received audio to another TCP server as raw PCM samples (16-bit, 48kHz, 2 channels).
+
+First, you need to run a TCP server that will receive the audio samples. For example, you can use a combination of `nc` and `play` (from `sox` package) to listen to the audio:
+
+```sh
+nc -l 22222 | play -r 48000 -c 2 -b 16 -e signed -t raw -
+```
+
+Then you can run `gojamclient`:
+
+```sh
+go run ./cmd/gojamclient/ -server <ip>:<port> -pcmout localhost:22222
+```
