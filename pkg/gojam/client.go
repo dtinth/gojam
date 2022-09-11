@@ -23,6 +23,9 @@ type Client struct {
 	// Handle PCM data. This is called when a new PCM data is available.
 	// The PCM data is in stereo, 48kHz, 16-bit signed integer.
 	HandlePCM func([]int16)
+
+	// Print debug logging message
+	DebugLog func(string)
 }
 
 // Creates a client
@@ -56,8 +59,12 @@ func NewClient(serverAddress string) (c *Client, err error) {
 
 // Prints a debug logging message
 func (c *Client) debug(format string, args ...interface{}) {
-	format = "DEBUG [gojamclient] " + format + "\n"
-	fmt.Fprintf(os.Stderr, format, args...)
+	if c.DebugLog != nil {
+		c.DebugLog(fmt.Sprintf(format, args...))
+	} else {
+		format = "[gojam.Client DEBUG] " + format + "\n"
+		fmt.Fprintf(os.Stderr, format, args...)
+	}
 }
 
 // Sends a silence packet to the server every 100ms
