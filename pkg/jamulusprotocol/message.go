@@ -90,7 +90,7 @@ func (m Message) String() string {
 }
 
 // Serializes a Jamulus protocol message.
-func (m Message) ToPacket() []byte {
+func (m Message) Bytes() []byte {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.LittleEndian, uint16(0x0000)) // Tag
 	binary.Write(&buf, binary.LittleEndian, uint16(m.Id))   // ID

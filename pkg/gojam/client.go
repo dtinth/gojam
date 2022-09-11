@@ -129,7 +129,7 @@ func (c *Client) acknowledgeMessage(id jamulusprotocol.MsgId, counter uint8) {
 
 // Sends a message back to the server
 func (c *Client) sendMessage(message jamulusprotocol.Message) {
-	packet := message.ToPacket()
+	packet := message.Bytes()
 	_, err := c.conn.Write(packet[:])
 	if err != nil {
 		c.debug("Error writing packet: %s", err)
