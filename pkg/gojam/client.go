@@ -199,6 +199,11 @@ func (c *Client) sendChannelInfos() {
 	c.sendMessage(message)
 }
 
+// Return the current channel info
+func (c *Client) GetChannelInfo() jamulusprotocol.ChannelInfo {
+	return c.info
+}
+
 // Update the client's channel info
 func (c *Client) UpdateChannelInfo(info jamulusprotocol.ChannelInfo) {
 	c.info = info

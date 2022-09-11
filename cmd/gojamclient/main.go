@@ -17,6 +17,7 @@ func main() {
 	// Parse command line arguments
 	server := flag.String("server", "localhost:22124", "server to connect to")
 	pcmout := flag.String("pcmout", "", "server to pipe PCM data to")
+	name := flag.String("name", "", "musician name")
 
 	flag.Parse()
 
@@ -28,6 +29,12 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("client:", client)
+
+	info := client.GetChannelInfo()
+	if *name != "" {
+		info.Name = *name
+		client.UpdateChannelInfo(info)
+	}
 
 	if *pcmout != "" {
 		installPCMOut(client, *pcmout)
