@@ -1,8 +1,8 @@
 package jamulusaudio
 
 // #cgo LDFLAGS: -lopus
-// #include "opus/include/opus_custom.h"
-// #include "opus/include/opus_defines.h"
+// #include "opus_custom.h"
+// #include "opus_defines.h"
 // int gojam_opus_disable_vbr(OpusCustomEncoder* encoder) { return opus_custom_encoder_ctl(encoder, OPUS_SET_VBR(0)); }
 // int gojam_opus_set_low_delay(OpusCustomEncoder* encoder) { return opus_custom_encoder_ctl(encoder, OPUS_SET_APPLICATION(OPUS_APPLICATION_RESTRICTED_LOWDELAY)); }
 // int gojam_opus_set_low_complexity(OpusCustomEncoder* encoder) { return opus_custom_encoder_ctl(encoder, OPUS_SET_COMPLEXITY(1)); }
