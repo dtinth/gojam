@@ -9,7 +9,7 @@ git clone https://github.com/jamulussoftware/jamulus.git
 bash -c 'cd jamulus/libs/opus && ./configure --enable-static --disable-shared --enable-custom-modes --disable-hardening && make'
 ```
 
-Then provide these environment variables to `go build`:
+Then provide these environment variables to `go build` or `go run` in order to successfully build and run your code:
 
 ```sh
 export CGO_CFLAGS="-I$PWD/jamulus/libs/opus/include"
