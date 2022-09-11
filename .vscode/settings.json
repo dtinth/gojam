@@ -1,0 +1,6 @@
+{
+  "go.toolsEnvVars": {
+    "CGO_CFLAGS": "-I${workspaceFolder}/jamulus/libs/opus/include",
+    "CGO_LDFLAGS": "-L${workspaceFolder}/jamulus/libs/opus/.libs"
+  }
+}
