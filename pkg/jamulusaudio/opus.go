@@ -1,6 +1,6 @@
 package jamulusaudio
 
-// #cgo LDFLAGS: -lopus
+// #cgo LDFLAGS: -lopus -lm
 // #include "opus_custom.h"
 // #include "opus_defines.h"
 // int gojam_opus_disable_vbr(OpusCustomEncoder* encoder) { return opus_custom_encoder_ctl(encoder, OPUS_SET_VBR(0)); }

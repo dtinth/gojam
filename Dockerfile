@@ -12,3 +12,4 @@ COPY . .
 ENV CGO_CFLAGS=-I/opt/jamulus/libs/opus/include
 ENV CGO_LDFLAGS=-L/opt/jamulus/libs/opus/.libs
 RUN go build -v ./cmd/gojamclient
+RUN go install -v ./cmd/gojamclient
