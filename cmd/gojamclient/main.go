@@ -3,20 +3,24 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/dtinth/gojam/pkg/gojam"
+	"github.com/dtinth/gojam/pkg/jamulusprotocol"
 )
 
 func main() {
 	// Parse command line arguments
 	server := flag.String("server", "localhost:22124", "server to connect to")
 	pcmout := flag.String("pcmout", "", "server to pipe PCM data to")
+	apiserver := flag.String("apiserver", "", "server to listen for API requests")
 	name := flag.String("name", "", "musician name")
 
 	flag.Parse()
@@ -33,11 +37,17 @@ func main() {
 	info := client.GetChannelInfo()
 	if *name != "" {
 		info.Name = *name
+		info.SkillLevel = jamulusprotocol.SkillNone
+		info.Instrument = jamulusprotocol.InstrumentStreamer
 		client.UpdateChannelInfo(info)
 	}
 
 	if *pcmout != "" {
 		installPCMOut(client, *pcmout)
+	}
+
+	if *apiserver != "" {
+		installAPIServer(client, *apiserver)
 	}
 
 	sc := make(chan os.Signal, 1)
@@ -71,4 +81,66 @@ func installPCMOut(client *gojam.Client, pcmout string) {
 		}
 		outChan <- buf.Bytes()
 	}
+}
+
+type ApiChannelInfo struct {
+	Name       *string `json:"name"`
+	City       *string `json:"city"`
+	Country    *uint16 `json:"country"`
+	SkillLevel *uint8  `json:"skillLevel"`
+	Instrument *uint32 `json:"instrument"`
+}
+
+func installAPIServer(client *gojam.Client, apiserver string) {
+	http.HandleFunc("/channel-info", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			info := client.GetChannelInfo()
+			skillLevelId := uint8(info.SkillLevel)
+			instrumentId := uint32(info.Instrument)
+			json.NewEncoder(w).Encode(ApiChannelInfo{
+				Name:       &info.Name,
+				City:       &info.City,
+				Country:    &info.Country,
+				SkillLevel: &skillLevelId,
+				Instrument: &instrumentId,
+			})
+		case "PATCH":
+			var patch ApiChannelInfo
+			err := json.NewDecoder(r.Body).Decode(&patch)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			info := client.GetChannelInfo()
+			if patch.Name != nil {
+				info.Name = *patch.Name
+			}
+			if patch.City != nil {
+				info.City = *patch.City
+			}
+			if patch.Country != nil {
+				info.Country = *patch.Country
+			}
+			if patch.SkillLevel != nil {
+				info.SkillLevel = jamulusprotocol.SkillLevelId(*patch.SkillLevel)
+			}
+			if patch.Instrument != nil {
+				info.Instrument = jamulusprotocol.InstrumentId(*patch.Instrument)
+			}
+			client.UpdateChannelInfo(info)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "method not allowed",
+			})
+		}
+	})
+
+	go func() {
+		err := http.ListenAndServe(apiserver, nil)
+		if err != nil {
+			panic(err)
+		}
+	}()
 }
