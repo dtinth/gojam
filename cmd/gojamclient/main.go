@@ -129,6 +129,9 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 				info.Instrument = jamulusprotocol.InstrumentId(*patch.Instrument)
 			}
 			client.UpdateChannelInfo(info)
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "ok",
+			})
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			json.NewEncoder(w).Encode(map[string]string{
