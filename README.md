@@ -18,7 +18,7 @@ export CGO_LDFLAGS="-L$PWD/jamulus/libs/opus/.libs"
 
 ## Usage
 
-A simple CLI, `gojamclient` is provided that can connect to a Jamulus server and send received audio to another TCP server as raw PCM samples (16-bit, 48kHz, 2 channels).
+A simple CLI, `gojamclient` is provided that can connect to a Jamulus server and send received audio to another TCP server as raw PCM samples (16-bit signed, little endian, 48kHz, 2 channels).
 
 First, you need to run a TCP server that will receive the audio samples. For example, you can use a combination of `nc` and `play` (from `sox` package) to listen to the audio:
 
@@ -43,3 +43,40 @@ http get localhost:9999/channel-info
 # Update the client info
 http patch localhost:9999/channel-info name=newname
 ```
+
+### Streaming Jamulus audio to Discord
+
+There is a separate project [pcm2discord](https://github.com/dtinth/pcm2discord) that receives raw PCM samples via TCP, and sends them to Discord.
+
+<details><summary>To make the Jamulus change its name to display the number of listeners in Discord, the following Python script can be used:</summary>
+
+```python
+import requests
+import time
+
+last_name = None
+
+while True:
+    try:
+        # Get the count of listeners from Discord
+        r = requests.get('http://localhost:28280/count')
+
+        # Response is in form: { "listening": 2 }
+        # Get the number of listeners
+        listeners = r.json()['listening']
+
+        # Submit the number of listeners to channel info endpoint
+        name = ' Discord[' + str(listeners) + ']'
+        r = requests.patch('http://localhost:28281/channel-info', json={'name': name})
+
+        if last_name != name:
+            print('Updated channel name to ' + name + ' at ' + time.strftime('%H:%M:%S'))
+            last_name = name
+    except Exception as e:
+        print('Error: {}'.format(e))
+    finally:
+        # Wait 2 seconds
+        time.sleep(2)
+```
+
+</details>
