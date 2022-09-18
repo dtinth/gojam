@@ -1,6 +1,6 @@
 # gojam
 
-Go implementation of a Jamulus client.
+An implementation of a Jamulus client written in Go, intended for headless streaming use-cases.
 
 To be able to use this client, we need to build a custom version of Opus from Jamulus source tree.
 
