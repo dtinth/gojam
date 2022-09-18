@@ -18,10 +18,11 @@ import (
 
 func main() {
 	// Parse command line arguments
-	server := flag.String("server", "localhost:22124", "server to connect to")
+	server := flag.String("server", "127.0.0.1:22124", "server to connect to")
 	pcmout := flag.String("pcmout", "", "server to pipe PCM data to")
 	apiserver := flag.String("apiserver", "", "server to listen for API requests")
 	name := flag.String("name", "", "musician name")
+	vad := flag.Bool("vad", false, "do not send audio when there is no activity")
 
 	flag.Parse()
 
@@ -43,7 +44,7 @@ func main() {
 	}
 
 	if *pcmout != "" {
-		installPCMOut(client, *pcmout)
+		installPCMOut(client, *pcmout, *vad)
 	}
 
 	if *apiserver != "" {
@@ -58,7 +59,7 @@ func main() {
 	client.Close()
 }
 
-func installPCMOut(client *gojam.Client, pcmout string) {
+func installPCMOut(client *gojam.Client, pcmout string, vad bool) {
 	conn, err := net.Dial("tcp", pcmout)
 	if err != nil {
 		panic(err)
@@ -74,10 +75,28 @@ func installPCMOut(client *gojam.Client, pcmout string) {
 			}
 		}
 	}()
+	hp := 0
 	client.HandlePCM = func(pcm []int16) {
 		var buf bytes.Buffer
+		activityDetected := false
 		for _, sample := range pcm {
 			binary.Write(&buf, binary.LittleEndian, sample)
+			if sample != 0 {
+				activityDetected = true
+			}
+		}
+		if vad {
+			if activityDetected {
+				hp = 100
+			} else {
+				hp--
+				if hp < 0 {
+					hp = 0
+				}
+				if hp == 0 {
+					return
+				}
+			}
 		}
 		outChan <- buf.Bytes()
 	}
