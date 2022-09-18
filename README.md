@@ -31,3 +31,15 @@ Then you can run `gojamclient`:
 ```sh
 go run ./cmd/gojamclient/ -server <ip>:<port> -pcmout localhost:22222
 ```
+
+### REST API
+
+When you run an API server, e.g. `-apiserver localhost:9999`, you can control the client, for example, using [HTTPie](https://httpie.io/):
+
+```sh
+# Get the client info
+http get localhost:9999/channel-info
+
+# Update the client info
+http patch localhost:9999/channel-info name=newname
+```
