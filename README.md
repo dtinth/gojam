@@ -52,6 +52,12 @@ http get localhost:9999/channel-info
 
 # Update the client info
 http patch localhost:9999/channel-info name=newname
+
+# Retrieve latest 100 chat messages
+http get localhost:9999/chat
+
+# Send a chat message
+http post localhost:9999/chat message="hello world"
 ```
 
 ### Streaming Jamulus audio to Discord
