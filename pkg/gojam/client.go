@@ -3,6 +3,7 @@ package gojam
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -24,6 +25,10 @@ type Client struct {
 	// Handle PCM data. This is called when a new PCM data is available.
 	// The PCM data is in stereo, 48kHz, 16-bit signed integer.
 	HandlePCM func([]int16)
+
+	// Handle chat message. This is called when a chat message is received.
+	// The message is in UTF-8, formatted as HTML.
+	HandleChatMessage func(string)
 
 	// Print debug logging message
 	DebugLog func(string)
@@ -148,6 +153,8 @@ func (c *Client) handleProtocolMessage(message jamulusprotocol.Message) {
 		c.sendChannelInfos()
 	case jamulusprotocol.ConnClientsList:
 		c.handleConnClientsList(message.Data)
+	case jamulusprotocol.ChatText:
+		c.handleChatText(message.Data)
 	}
 }
 
@@ -270,6 +277,43 @@ func (c *Client) handleOpusPacket(packet []byte, sequenceNum uint8, audioBuf []i
 			c.HandlePCM(audioBuf[:samples*2])
 		}
 	}
+}
+
+// Handles a chat text message
+func (c *Client) handleChatText(data []byte) {
+	// The first 2 bytes is the length, followed by the text.
+	// Create a buffer from the data
+	buf := bytes.NewBuffer(data)
+
+	// Read the length
+	length := binary.LittleEndian.Uint16(buf.Next(2))
+
+	// Read the text
+	text := string(buf.Next(int(length)))
+
+	// Format text to JSON and log it
+	textJson, err := json.Marshal(text)
+	if err != nil {
+		c.debug("Error formatting chat text: %s", err)
+	} else {
+		c.debug("Received chat text: %s", textJson)
+	}
+	c.HandleChatMessage(text)
+}
+
+// Sends a chat message to the server
+func (c *Client) SendChatMessage(text string) {
+	// Create a buffer to hold the message data
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.LittleEndian, uint16(len(text))) // Length
+	buf.WriteString(text)                                      // Text
+
+	message := jamulusprotocol.Message{
+		Id:      jamulusprotocol.ChatText,
+		Counter: c.nextCounterValue(),
+		Data:    buf.Bytes(),
+	}
+	c.sendMessage(message)
 }
 
 // Close the client

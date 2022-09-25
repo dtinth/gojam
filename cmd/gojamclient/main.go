@@ -11,9 +11,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/dtinth/gojam/pkg/gojam"
 	"github.com/dtinth/gojam/pkg/jamulusprotocol"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -38,8 +40,6 @@ func main() {
 	info := client.GetChannelInfo()
 	if *name != "" {
 		info.Name = *name
-		info.SkillLevel = jamulusprotocol.SkillNone
-		info.Instrument = jamulusprotocol.InstrumentStreamer
 		client.UpdateChannelInfo(info)
 	}
 
@@ -102,12 +102,22 @@ func installPCMOut(client *gojam.Client, pcmout string, vad bool) {
 	}
 }
 
-type ApiChannelInfo struct {
+type apiChannelInfo struct {
 	Name       *string `json:"name"`
 	City       *string `json:"city"`
 	Country    *uint16 `json:"country"`
 	SkillLevel *uint8  `json:"skillLevel"`
 	Instrument *uint32 `json:"instrument"`
+}
+
+type chatHistoryEntry struct {
+	Id        string `json:"id"`
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp"`
+}
+
+type apiChatInput struct {
+	Message string `json:"message"`
 }
 
 func installAPIServer(client *gojam.Client, apiserver string) {
@@ -117,7 +127,7 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 			info := client.GetChannelInfo()
 			skillLevelId := uint8(info.SkillLevel)
 			instrumentId := uint32(info.Instrument)
-			json.NewEncoder(w).Encode(ApiChannelInfo{
+			json.NewEncoder(w).Encode(apiChannelInfo{
 				Name:       &info.Name,
 				City:       &info.City,
 				Country:    &info.Country,
@@ -125,7 +135,7 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 				Instrument: &instrumentId,
 			})
 		case "PATCH":
-			var patch ApiChannelInfo
+			var patch apiChannelInfo
 			err := json.NewDecoder(r.Body).Decode(&patch)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -158,6 +168,39 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 			})
 		}
 	})
+
+	chatHistory := []chatHistoryEntry{}
+	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			var input apiChatInput
+			err := json.NewDecoder(r.Body).Decode(&input)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			client.SendChatMessage(input.Message)
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "ok",
+			})
+		case "GET":
+			json.NewEncoder(w).Encode(chatHistory)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+	client.HandleChatMessage = func(message string) {
+		chatHistory = append(chatHistory, chatHistoryEntry{
+			Id:        uuid.New().String(),
+			Message:   message,
+			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+		})
+
+		// Trim chat history
+		if len(chatHistory) > 100 {
+			chatHistory = chatHistory[len(chatHistory)-100:]
+		}
+	}
 
 	go func() {
 		err := http.ListenAndServe(apiserver, nil)
