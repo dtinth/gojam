@@ -62,37 +62,4 @@ http post localhost:9999/chat message="hello world"
 
 ### Streaming Jamulus audio to Discord
 
-There is a separate project [pcm2discord](https://github.com/dtinth/pcm2discord) that receives raw PCM samples via TCP, and sends them to Discord.
-
-<details><summary>To make the Jamulus change its name to display the number of listeners in Discord, the following Python script can be used:</summary>
-
-```python
-import requests
-import time
-
-last_name = None
-
-while True:
-    try:
-        # Get the count of listeners from Discord
-        r = requests.get('http://localhost:28280/count')
-
-        # Response is in form: { "listening": 2 }
-        # Get the number of listeners
-        listeners = r.json()['listening']
-
-        # Submit the number of listeners to channel info endpoint
-        name = ' Discord[' + str(listeners) + ']'
-        r = requests.patch('http://localhost:28281/channel-info', json={'name': name})
-
-        if last_name != name:
-            print('Updated channel name to ' + name + ' at ' + time.strftime('%H:%M:%S'))
-            last_name = name
-    except Exception as e:
-        print('Error: {}'.format(e))
-    finally:
-        # Wait 2 seconds
-        time.sleep(2)
-```
-
-</details>
+There is a separate project [pcm2discord](https://github.com/dtinth/pcm2discord) that receives raw PCM samples via TCP, and sends them to Discord. A Python script [jamulus-discord-glue](https://github.com/dtinth/jamulus-discord-glue) is used to [glue](https://en.wikipedia.org/wiki/Glue_code) these 2 systems together.
