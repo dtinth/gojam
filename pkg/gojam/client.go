@@ -298,7 +298,9 @@ func (c *Client) handleChatText(data []byte) {
 	} else {
 		c.debug("Received chat text: %s", textJson)
 	}
-	c.HandleChatMessage(text)
+	if c.HandleChatMessage != nil {
+		c.HandleChatMessage(text)
+	}
 }
 
 // Sends a chat message to the server
