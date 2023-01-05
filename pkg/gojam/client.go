@@ -30,6 +30,12 @@ type Client struct {
 	// The message is in UTF-8, formatted as HTML.
 	HandleChatMessage func(string)
 
+	// Handle sound levels. This is called when the sound levels are updated.
+	HandleClientList func([]*jamulusprotocol.ClientListItem)
+
+	// Handle sound levels. This is called when the sound levels are updated.
+	HandleSoundLevels func([]uint8)
+
 	// Print debug logging message
 	DebugLog func(string)
 }
@@ -159,6 +165,8 @@ func (c *Client) handleProtocolMessage(message jamulusprotocol.Message) {
 		c.sendChannelInfos()
 	case jamulusprotocol.ConnClientsList:
 		c.handleConnClientsList(message.Data)
+	case jamulusprotocol.ClmChannelLevelList:
+		c.handleClmChannelLevelList(message.Data)
 	case jamulusprotocol.ChatText:
 		c.handleChatText(message.Data)
 	}
@@ -228,6 +236,9 @@ func (c *Client) handleConnClientsList(data []byte) {
 	// Create a buffer from the data
 	buf := bytes.NewBuffer(data)
 
+	// Create an array to hold the ClientListItem structs
+	var clients []*jamulusprotocol.ClientListItem
+
 	// Read the clients until we reach the end of the buffer
 	for buf.Len() > 0 {
 		client, err := jamulusprotocol.ParseClientListItem(buf)
@@ -236,6 +247,16 @@ func (c *Client) handleConnClientsList(data []byte) {
 			break
 		}
 		c.debug("Client list item: %s", client)
+		clients = append(clients, client)
+	}
+
+	// Call the callback
+	if c.HandleClientList != nil {
+		c.HandleClientList(clients)
+	}
+
+	// Unmute all channels
+	for _, client := range clients {
 		c.unmute(client.ChannelId)
 	}
 }
@@ -253,6 +274,32 @@ func (c *Client) unmute(channelId uint8) {
 		Data:    buf.Bytes(),
 	}
 	c.sendMessage(message)
+}
+
+// Handles a ClmChannelLevelList message
+func (c *Client) handleClmChannelLevelList(data []byte) {
+	// The `data` contains the level for each channel.
+	// One byte contains the level for two channels.
+	// The lower 4 bits are for the first channel, and the upper 4 bits are for the second channel.
+	// This goes on until the end of the data.
+	// If there is an odd number of channels, there will be one unused nibble at the end.
+
+	// Create output array
+	output := make([]uint8, len(data)*2)
+
+	// Loop through the data
+	for i, b := range data {
+		output[i*2] = b & 0x0f
+		output[i*2+1] = b >> 4
+	}
+
+	// Debug output
+	c.debug("Channel levels: %v", output)
+
+	// Execute callback
+	if c.HandleSoundLevels != nil {
+		c.HandleSoundLevels(output)
+	}
 }
 
 // Get the next counter value

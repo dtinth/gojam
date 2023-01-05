@@ -189,6 +189,7 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})
+
 	client.HandleChatMessage = func(message string) {
 		chatHistory = append(chatHistory, chatHistoryEntry{
 			Id:        uuid.New().String(),
