@@ -120,20 +120,18 @@ type apiChatInput struct {
 	Message string `json:"message"`
 }
 
+type apiEvent struct {
+	Clients        *[]apiChannelInfo `json:"clients,omitempty"`
+	Levels         *[]int            `json:"levels,omitempty"`
+	NewChatMessage *chatHistoryEntry `json:"newChatMessage,omitempty"`
+}
+
 func installAPIServer(client *gojam.Client, apiserver string) {
 	http.HandleFunc("/channel-info", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			info := client.GetChannelInfo()
-			skillLevelId := uint8(info.SkillLevel)
-			instrumentId := uint32(info.Instrument)
-			json.NewEncoder(w).Encode(apiChannelInfo{
-				Name:       &info.Name,
-				City:       &info.City,
-				Country:    &info.Country,
-				SkillLevel: &skillLevelId,
-				Instrument: &instrumentId,
-			})
+			json.NewEncoder(w).Encode(serializeChannelInfo(&info))
 		case "PATCH":
 			var patch apiChannelInfo
 			err := json.NewDecoder(r.Body).Decode(&patch)
@@ -190,6 +188,34 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 		}
 	})
 
+	broadcaster := newEventBroadcaster()
+	welcomeEvent := apiEvent{}
+	broadcaster.GetWelcomeMessage = func() string {
+		return jsonMarshal(welcomeEvent)
+	}
+	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+		f, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		ctx := r.Context()
+		unregister := broadcaster.Register(r.RemoteAddr, func(data string) {
+			go func() {
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				f.Flush()
+			}()
+		})
+
+		<-ctx.Done()
+		unregister()
+	})
+
 	client.HandleChatMessage = func(message string) {
 		chatHistory = append(chatHistory, chatHistoryEntry{
 			Id:        uuid.New().String(),
@@ -201,6 +227,32 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 		if len(chatHistory) > 100 {
 			chatHistory = chatHistory[len(chatHistory)-100:]
 		}
+
+		// Broadcast
+		event := apiEvent{}
+		event.NewChatMessage = &chatHistory[len(chatHistory)-1]
+		broadcaster.Broadcast(jsonMarshal(event))
+	}
+
+	client.HandleSoundLevels = func(list []uint8) {
+		event := apiEvent{}
+		levels := make([]int, len(list))
+		for i, level := range list {
+			levels[i] = int(level)
+		}
+		event.Levels = &levels
+		welcomeEvent.Levels = &levels
+		broadcaster.Broadcast(jsonMarshal(event))
+	}
+	client.HandleClientList = func(list []*jamulusprotocol.ClientListItem) {
+		event := apiEvent{}
+		clients := make([]apiChannelInfo, len(list))
+		for i, item := range list {
+			clients[i] = serializeClientListItem(item)
+		}
+		event.Clients = &clients
+		welcomeEvent.Clients = &clients
+		broadcaster.Broadcast(jsonMarshal(event))
 	}
 
 	go func() {
@@ -209,4 +261,36 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 			panic(err)
 		}
 	}()
+}
+
+func jsonMarshal(event apiEvent) string {
+	data, err := json.Marshal(event)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
+
+func serializeChannelInfo(info *jamulusprotocol.ChannelInfo) apiChannelInfo {
+	skillLevelId := uint8(info.SkillLevel)
+	instrumentId := uint32(info.Instrument)
+	return apiChannelInfo{
+		Name:       &info.Name,
+		City:       &info.City,
+		Country:    &info.Country,
+		SkillLevel: &skillLevelId,
+		Instrument: &instrumentId,
+	}
+}
+
+func serializeClientListItem(item *jamulusprotocol.ClientListItem) apiChannelInfo {
+	skillLevelId := uint8(item.SkillLevel)
+	instrumentId := uint32(item.InstrumentId)
+	return apiChannelInfo{
+		Name:       &item.Name,
+		City:       &item.City,
+		Country:    &item.CountryId,
+		SkillLevel: &skillLevelId,
+		Instrument: &instrumentId,
+	}
 }
