@@ -15,7 +15,7 @@ import (
 )
 
 type Client struct {
-	conn        net.Conn
+	conn        *net.UDPConn
 	nextCounter uint8
 	decoder     *jamulusaudio.OpusDecoder
 	buffer      *jitterbuffer.JitterBuffer
@@ -54,8 +54,14 @@ func NewClient(serverAddress string) (c *Client, err error) {
 	// Create a jitter buffer
 	c.buffer = jitterbuffer.NewJitterBuffer(96)
 
+	// Resolve the server address
+	remoteAddr, err := net.ResolveUDPAddr("udp", serverAddress)
+	if err != nil {
+		return nil, err
+	}
+
 	// Connect to the server
-	conn, err := net.Dial("udp", serverAddress)
+	conn, err := net.DialUDP("udp", nil, remoteAddr)
 	if err != nil {
 		return nil, err
 	}
