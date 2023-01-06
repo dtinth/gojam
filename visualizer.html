@@ -32,12 +32,12 @@
         })
         for await (const chunk of streamAsyncIterator(stream)) {
           firstByteReceived = true
+          parts.push(chunk)
+          size += chunk.byteLength
+          downloadEl.textContent = `Download (${(size / 1024 / 1024).toFixed(2)} MB)`
           await new Promise(resolve => {
             onUpdateEnd = resolve
             sourceBuffer.appendBuffer(chunk)
-            parts.push(chunk)
-            size += chunk.byteLength
-            downloadEl.textContent = `Download (${(size / 1024 / 1024).toFixed(2)} MB)`
           })
         }
       })
