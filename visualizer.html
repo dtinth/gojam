@@ -9,14 +9,18 @@
 <body>
   <audio id="audio" controls></audio>
   <button id="play">Play</button>
+  <button id="download" hidden>Download</button>
   <pre id="status"></pre>
   <script>
     document.querySelector('#play').addEventListener('click', async () => {
       document.querySelector('#play').remove()
 
       const audioEl = document.querySelector('#audio')
+      const downloadEl = document.querySelector('#download')
       const mediaSource = new MediaSource()
       let firstByteReceived = false
+      const parts = []
+      let size = 0
       mediaSource.addEventListener('sourceopen', async () => {
         console.log('[sourceopen]')
         const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
@@ -31,8 +35,20 @@
           await new Promise(resolve => {
             onUpdateEnd = resolve
             sourceBuffer.appendBuffer(chunk)
+            parts.push(chunk)
+            size += chunk.byteLength
+            downloadEl.textContent = `Download (${(size / 1024 / 1024).toFixed(2)} MB)`
           })
         }
+      })
+      downloadEl.hidden = false
+      downloadEl.addEventListener('click', () => {
+        const blob = new Blob(parts, {type: 'audio/mpeg'})
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'jamulus.mp3'
+        a.click()
       })
       audioEl.src = URL.createObjectURL(mediaSource)
       for (;;) {
