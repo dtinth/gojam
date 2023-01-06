@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jamulus Visualizer</title>
+</head>
+<body>
+  <audio id="audio" controls></audio>
+  <button id="play">Play</button>
+  <pre id="status"></pre>
+  <script>
+    document.querySelector('#play').addEventListener('click', async () => {
+      document.querySelector('#play').remove()
+
+      const audioEl = document.querySelector('#audio')
+      const mediaSource = new MediaSource()
+      let firstByteReceived = false
+      mediaSource.addEventListener('sourceopen', async () => {
+        console.log('[sourceopen]')
+        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
+        const response = await fetch('http://localhost:9999/mp3')
+        const stream = response.body
+        let onUpdateEnd = () => {}
+        sourceBuffer.addEventListener('updateend', () => {
+          onUpdateEnd()
+        })
+        for await (const chunk of streamAsyncIterator(stream)) {
+          firstByteReceived = true
+          await new Promise(resolve => {
+            onUpdateEnd = resolve
+            sourceBuffer.appendBuffer(chunk)
+          })
+        }
+      })
+      audioEl.src = URL.createObjectURL(mediaSource)
+      for (;;) {
+        if (firstByteReceived) break
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      setTimeout(() => {
+        audioEl.play()
+      }, 500)
+
+      const eventSource = new EventSource('http://localhost:9999/events')
+      const currentData = {}
+      eventSource.addEventListener('message', event => {
+        const data = JSON.parse(event.data)
+        if (data.clients) {
+          currentData.clients = data.clients
+        }
+        if (data.levels) {
+          currentData.levels = data.levels
+        }
+        if (currentData.clients) {
+          const clients = currentData.clients.map((c, i) => {
+            return c.name.padEnd(16) + ' ' + '#'.repeat(currentData.levels?.[i])
+          })
+          document.querySelector('#status').textContent = clients.join('\n')
+        }
+      })
+    })
+
+    // See: https://github.com/whatwg/streams/issues/778#issuecomment-325097792
+    async function* streamAsyncIterator(stream) {
+      const reader = stream.getReader();
+      try {
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) return;
+          yield value;
+        }
+      }
+      finally {
+        reader.releaseLock();
+      }
+    }
+  </script>
+</body>
+</html>

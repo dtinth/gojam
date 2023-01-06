@@ -215,6 +215,7 @@ func installAPIServer(client *gojam.Client, pipe *soundPipe, apiserver string, m
 			}
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
 
 			outChan := make(chan []byte, 100)
 			unregister := station.Register(r.RemoteAddr, outChan)

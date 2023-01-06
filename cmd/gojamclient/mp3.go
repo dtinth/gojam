@@ -50,8 +50,13 @@ func newMp3Broadcaster() *mp3Broadcaster {
 func (b *mp3Broadcaster) sendMp3Data(out []byte) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
-	for _, ch := range b.connections {
-		ch <- out
+	for id, ch := range b.connections {
+		// Do not block
+		select {
+		case ch <- out:
+		default:
+			fmt.Fprintf(os.Stderr, "[mp3Broadcaster] drop %s\n", id)
+		}
 	}
 }
 
