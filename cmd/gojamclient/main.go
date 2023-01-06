@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -25,6 +23,7 @@ func main() {
 	apiserver := flag.String("apiserver", "", "server to listen for API requests")
 	name := flag.String("name", "", "musician name")
 	vad := flag.Bool("vad", false, "do not send audio when there is no activity")
+	mp3 := flag.Bool("mp3", false, "encode mp3 and exposes via API server (requires ffmpeg)")
 
 	flag.Parse()
 
@@ -43,12 +42,17 @@ func main() {
 		client.UpdateChannelInfo(info)
 	}
 
+	soundPipe := newSoundPipe(*vad)
+	client.HandlePCM = func(pcm []int16) {
+		soundPipe.WritePCM(pcm)
+	}
+
 	if *pcmout != "" {
-		installPCMOut(client, *pcmout, *vad)
+		installPCMOut(soundPipe, *pcmout)
 	}
 
 	if *apiserver != "" {
-		installAPIServer(client, *apiserver)
+		installAPIServer(client, soundPipe, *apiserver, *mp3)
 	}
 
 	sc := make(chan os.Signal, 1)
@@ -59,7 +63,7 @@ func main() {
 	client.Close()
 }
 
-func installPCMOut(client *gojam.Client, pcmout string, vad bool) {
+func installPCMOut(pipe *soundPipe, pcmout string) {
 	conn, err := net.Dial("tcp", pcmout)
 	if err != nil {
 		panic(err)
@@ -70,35 +74,13 @@ func installPCMOut(client *gojam.Client, pcmout string, vad bool) {
 			data := <-outChan
 			_, err := conn.Write(data)
 			if err != nil {
-				client.Close()
+				conn.Close()
 				panic(err)
 			}
 		}
 	}()
-	hp := 0
-	client.HandlePCM = func(pcm []int16) {
-		var buf bytes.Buffer
-		activityDetected := false
-		for _, sample := range pcm {
-			binary.Write(&buf, binary.LittleEndian, sample)
-			if sample != 0 {
-				activityDetected = true
-			}
-		}
-		if vad {
-			if activityDetected {
-				hp = 100
-			} else {
-				hp--
-				if hp < 0 {
-					hp = 0
-				}
-				if hp == 0 {
-					return
-				}
-			}
-		}
-		outChan <- buf.Bytes()
+	pipe.HandlePCMBytes = func(pcmBytes []byte) {
+		outChan <- pcmBytes
 	}
 }
 
@@ -126,7 +108,7 @@ type apiEvent struct {
 	NewChatMessage *chatHistoryEntry `json:"newChatMessage,omitempty"`
 }
 
-func installAPIServer(client *gojam.Client, apiserver string) {
+func installAPIServer(client *gojam.Client, pipe *soundPipe, apiserver string, mp3 bool) {
 	http.HandleFunc("/channel-info", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
@@ -216,6 +198,39 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 		unregister()
 	})
 
+	if mp3 {
+		station := newMp3Broadcaster()
+		oldHandler := pipe.HandlePCMBytes
+		pipe.HandlePCMBytes = func(pcmBytes []byte) {
+			if oldHandler != nil {
+				oldHandler(pcmBytes)
+			}
+			station.WritePCMBytes(pcmBytes)
+		}
+		http.HandleFunc("/mp3", func(w http.ResponseWriter, r *http.Request) {
+			f, ok := w.(http.Flusher)
+			if !ok {
+				http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "audio/mpeg")
+			w.Header().Set("Cache-Control", "no-cache")
+
+			outChan := make(chan []byte, 100)
+			unregister := station.Register(r.RemoteAddr, outChan)
+			defer unregister()
+			for {
+				select {
+				case <-r.Context().Done():
+					return
+				case data := <-outChan:
+					w.Write(data)
+					f.Flush()
+				}
+			}
+		})
+	}
+
 	client.HandleChatMessage = func(message string) {
 		chatHistory = append(chatHistory, chatHistoryEntry{
 			Id:        uuid.New().String(),
@@ -233,7 +248,6 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 		event.NewChatMessage = &chatHistory[len(chatHistory)-1]
 		broadcaster.Broadcast(jsonMarshal(event))
 	}
-
 	client.HandleSoundLevels = func(list []uint8) {
 		event := apiEvent{}
 		levels := make([]int, len(list))
@@ -254,7 +268,6 @@ func installAPIServer(client *gojam.Client, apiserver string) {
 		welcomeEvent.Clients = &clients
 		broadcaster.Broadcast(jsonMarshal(event))
 	}
-
 	go func() {
 		err := http.ListenAndServe(apiserver, nil)
 		if err != nil {
