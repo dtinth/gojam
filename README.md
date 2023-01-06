@@ -60,6 +60,30 @@ http get localhost:9999/chat
 http post localhost:9999/chat message="hello world"
 ```
 
+### EventStream (requires `-apiserver`)
+
+When you run an API server, you can also subscribe to [server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events) to receive events from the server.
+
+```sh
+# Subscribe to events
+curl localhost:9999/events
+```
+
+Upon subscribing, you will receive objects with these keys (all of them are optional):
+
+- `clients` - Emitted when the list of clients changes. The value is an array of client objects.
+- `levels` - Emitted when the list of client levels changes. The value is an array of numbers.
+- `newChatMessage` - Emitted when a new chat message is received. The value is a chat message object (same as the one returned by `/chat` endpoint).
+
+### MP3 stream (requires `-apiserver` and `ffmpeg`)
+
+When you run an API server, you can also stream the audio as MP3.
+
+```sh
+# Play the MP3 stream
+ffplay -i http://localhost:9999/mp3
+```
+
 ### Streaming Jamulus audio to Discord
 
 There is a separate project [pcm2discord](https://github.com/dtinth/pcm2discord) that receives raw PCM samples via TCP, and sends them to Discord. A Python script [jamulus-discord-glue](https://github.com/dtinth/jamulus-discord-glue) is used to [glue](https://en.wikipedia.org/wiki/Glue_code) these 2 systems together.
