@@ -5,8 +5,8 @@ RUN git clone https://github.com/jamulussoftware/jamulus.git /opt/jamulus
 RUN bash -c 'cd /opt/jamulus/libs/opus && autoreconf -f -i && ./configure --enable-static --disable-shared --enable-custom-modes --disable-hardening && make'
 
 FROM golang:1.19
+RUN wget https://github.com/eugeneware/ffmpeg-static/releases/download/b5.0.1/linux-x64 -O /usr/local/bin/ffmpeg && chmod +x /usr/local/bin/ffmpeg
 WORKDIR /usr/src/app
-
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 COPY --from=opus /opt/jamulus/ /opt/jamulus/
