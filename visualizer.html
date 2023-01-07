@@ -12,6 +12,7 @@
   <button id="download" hidden>Download</button>
   <pre id="status"></pre>
   <script>
+    const server = new URLSearchParams(location.search).get('apiserver') || 'http://localhost:9999'
     document.querySelector('#play').addEventListener('click', async () => {
       document.querySelector('#play').remove()
 
@@ -24,7 +25,7 @@
       mediaSource.addEventListener('sourceopen', async () => {
         console.log('[sourceopen]')
         const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
-        const response = await fetch('http://localhost:9999/mp3')
+        const response = await fetch(server + '/mp3')
         const stream = response.body
         let onUpdateEnd = () => {}
         sourceBuffer.addEventListener('updateend', () => {
@@ -59,7 +60,7 @@
         audioEl.play()
       }, 500)
 
-      const eventSource = new EventSource('http://localhost:9999/events')
+      const eventSource = new EventSource(server + '/events')
       const currentData = {}
       eventSource.addEventListener('message', event => {
         const data = JSON.parse(event.data)
