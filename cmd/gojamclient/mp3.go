@@ -80,3 +80,9 @@ func (b *mp3Broadcaster) WritePCMBytes(pcmBytes []byte) {
 		panic(err)
 	}
 }
+
+func (b *mp3Broadcaster) GetListenerCount() int {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	return len(b.connections)
+}

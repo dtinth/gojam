@@ -108,6 +108,10 @@ type apiEvent struct {
 	NewChatMessage *chatHistoryEntry `json:"newChatMessage,omitempty"`
 }
 
+type apiMp3Stats struct {
+	ListenersCount int `json:"listenersCount"`
+}
+
 func installAPIServer(client *gojam.Client, pipe *soundPipe, apiserver string, mp3 bool) {
 	http.HandleFunc("/channel-info", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -229,6 +233,12 @@ func installAPIServer(client *gojam.Client, pipe *soundPipe, apiserver string, m
 					f.Flush()
 				}
 			}
+		})
+		http.HandleFunc("/mp3-stats", func(w http.ResponseWriter, r *http.Request) {
+			stats := apiMp3Stats{
+				ListenersCount: station.GetListenerCount(),
+			}
+			json.NewEncoder(w).Encode(stats)
 		})
 	}
 
