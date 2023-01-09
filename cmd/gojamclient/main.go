@@ -21,6 +21,7 @@ func main() {
 	server := flag.String("server", "127.0.0.1:22124", "server to connect to")
 	pcmout := flag.String("pcmout", "", "server to pipe PCM data to")
 	apiserver := flag.String("apiserver", "", "server to listen for API requests")
+	directory := flag.String("directory", "", "directory server perform UDP hole punching")
 	name := flag.String("name", "", "musician name")
 	vad := flag.Bool("vad", false, "do not send audio when there is no activity")
 	mp3 := flag.Bool("mp3", false, "encode mp3 and exposes via API server (requires ffmpeg)")
@@ -53,6 +54,10 @@ func main() {
 
 	if *apiserver != "" {
 		installAPIServer(client, soundPipe, *apiserver, *mp3)
+	}
+
+	if *directory != "" {
+		client.PerformUdpHolePunchingViaDirectory(*directory)
 	}
 
 	sc := make(chan os.Signal, 1)

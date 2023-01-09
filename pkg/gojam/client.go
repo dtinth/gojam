@@ -21,6 +21,7 @@ type Client struct {
 	buffer      *jitterbuffer.JitterBuffer
 	closed      bool
 	info        jamulusprotocol.ChannelInfo
+	remoteAddr  *net.UDPAddr
 
 	// Handle PCM data. This is called when a new PCM data is available.
 	// The PCM data is in stereo, 48kHz, 16-bit signed integer.
@@ -65,9 +66,11 @@ func NewClient(serverAddress string) (c *Client, err error) {
 	if err != nil {
 		return nil, err
 	}
+	c.remoteAddr = remoteAddr
 
 	// Connect to the server
-	conn, err := net.DialUDP("udp", nil, remoteAddr)
+	// conn, err := net.DialUDP("udp", nil, remoteAddr)
+	conn, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +100,7 @@ func (c *Client) sendSilence() {
 	silence := jamulusaudio.NewSilentOpusStream()
 	for !c.closed {
 		packet := silence.Next()
-		_, err := c.conn.Write(packet[:])
+		_, err := c.conn.WriteToUDP(packet[:], c.remoteAddr)
 		if err != nil {
 			c.debug("Error writing packet: %s", err)
 		}
@@ -110,9 +113,14 @@ func (c *Client) handleIncomingPackets() {
 	buf := make([]byte, 8192)
 	audioBuf := make([]int16, 8192)
 	for !c.closed {
-		n, err := c.conn.Read(buf)
+		n, addr, err := c.conn.ReadFromUDP(buf)
 		if err != nil {
 			c.debug("Error reading from server: %s", err)
+			continue
+		}
+
+		// Only accept packets from the server
+		if !addr.IP.Equal(c.remoteAddr.IP) || addr.Port != c.remoteAddr.Port {
 			continue
 		}
 
@@ -147,7 +155,7 @@ func (c *Client) acknowledgeMessage(id jamulusprotocol.MsgId, counter uint8) {
 // Sends a message back to the server
 func (c *Client) sendMessage(message jamulusprotocol.Message) {
 	packet := message.Bytes()
-	_, err := c.conn.Write(packet[:])
+	_, err := c.conn.WriteToUDP(packet[:], c.remoteAddr)
 	if err != nil {
 		c.debug("Error writing packet: %s", err)
 	}
@@ -195,6 +203,25 @@ func (c *Client) sendNetwTransportProps() {
 		Data:    buf.Bytes(),
 	}
 	c.sendMessage(message)
+}
+
+// Performs UDP hole-punching by sending a request to the directory server
+func (c *Client) PerformUdpHolePunchingViaDirectory(directory string) {
+	message := jamulusprotocol.Message{
+		Id:      jamulusprotocol.ClmReqServerList,
+		Counter: 0,
+		Data:    []byte{},
+	}
+	packet := message.Bytes()
+	directoryAddr, err := net.ResolveUDPAddr("udp", directory)
+	if err != nil {
+		c.debug("Error resolving directory address: %s", err)
+		return
+	}
+	_, err = c.conn.WriteToUDP(packet[:], directoryAddr)
+	if err != nil {
+		c.debug("Error writing packet: %s", err)
+	}
 }
 
 // Sends a JittBufSize message to the server
