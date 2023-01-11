@@ -11,6 +11,7 @@
   <button id="play">Play</button>
   <button id="download" hidden>Download</button>
   <pre id="status"></pre>
+  <ul id="chat"></ul>
   <script>
     const server = new URLSearchParams(location.search).get('apiserver') || 'http://localhost:9999'
     document.querySelector('#play').addEventListener('click', async () => {
@@ -70,6 +71,9 @@
         if (data.levels) {
           currentData.levels = data.levels
         }
+        if (data.newChatMessage) {
+          addChat(data.newChatMessage)
+        }
         if (currentData.clients) {
           const clients = currentData.clients.map((c, i) => {
             return c.name.padEnd(16) + ' ' + '#'.repeat(currentData.levels?.[i])
@@ -92,6 +96,20 @@
       finally {
         reader.releaseLock();
       }
+    }
+
+    const seenChat = new Set()
+    function addChat(m) {
+      if (seenChat.has(m.id)) {
+        return
+      }
+      seenChat.add(m.id)
+      const li = document.createElement('li')
+      li.textContent = stripHtml(m.message)
+      document.querySelector('#chat').prepend(li)
+    }
+    function stripHtml(html) {
+      return html.replace(/<\/?[^>]+(>|$)/g, '')
     }
   </script>
 </body>
