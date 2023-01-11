@@ -277,6 +277,11 @@ func (c *Client) handleConnClientsList(data []byte) {
 		clients = append(clients, client)
 	}
 
+	// Ensure that client list is not empty
+	if len(clients) == 0 {
+		return
+	}
+
 	// Call the callback
 	if c.HandleClientList != nil {
 		c.HandleClientList(clients)
