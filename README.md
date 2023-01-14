@@ -84,6 +84,16 @@ When you run an API server, you can also stream the audio as MP3.
 ffplay -i http://localhost:9999/mp3
 ```
 
+### Listener client
+
+Run `gojam` with `-apiserver` on port 9999 and with `-mp3` flag:
+
+```sh
+go run ./cmd/gojamclient/ -apiserver :9999 -mp3 -server 127.0.0.1:22124
+```
+
+You can then open `visualizer.html` in your browser to listen to the audio stream being sent to it.
+
 ### Streaming Jamulus audio to Discord
 
 There is a separate project [pcm2discord](https://github.com/dtinth/pcm2discord) that receives raw PCM samples via TCP, and sends them to Discord. A Python script [jamulus-discord-glue](https://github.com/dtinth/jamulus-discord-glue) is used to [glue](https://en.wikipedia.org/wiki/Glue_code) these 2 systems together.
